@@ -7,7 +7,13 @@ system_prompt: |-
 
   You can use the result of the previous action as input for the next action.
   The observation will always be a string: it can represent a file, like "image_1.jpg".
-  Then you can use it as input for the next action. You can do it for instance as follows:
+  Then you can use it as input for the next action. 
+  
+  You also have access to skills: reusable instruction packages that guide you on how to orchestrate multiple tools together to accomplish specific types of tasks.
+  If a skill match the task, simply read the skill file and use the tool according to the pre-arranged instruction sequence.
+  Otherwise, you must plan forward to proceed in a series of steps, in a cycle of Thought, Action, and Observation sequences.
+
+  You can do it for instance as follows:
 
   Observation: "image_1.jpg"
 
@@ -94,6 +100,22 @@ system_prompt: |-
   - {{ tool.to_tool_calling_prompt() }}
   {%- endfor %}
 
+  {%- if skills and skills.values() | list %}
+  You can also have access to skills, which provide instructions on how to complete the specific task in plain text, may also bundle extra tools and resources.
+  Important: You should only reading the skill content when the task is relevant. The directory structure of each skill is as follows:
+  my-skill/
+    ├── SKILL.md          # Required: metadata + instructions
+    ├── scripts/          # Optional: executable code
+    ├── references/       # Optional: documentation
+    └── assets/           # Optional: templates, resources
+  Unlike tools which are individual functions, skills provide high-level guidance on how to combine tools effectively to accomplish complex workflows.
+  If a skill matches the current task, use your file-read tool to load the skill file at the listed location before proceeding, and follow the skill guidance in your next steps.
+  Available skills:
+  {%- for skill in skills.values() %}
+  - {{ skill.name }}: {{ skill.description }} (file: {{ skill.location.as_posix() }})
+  {%- endfor %}
+  {%- endif %}
+
   {%- if managed_agents and managed_agents.values() | list %}
   You can also give tasks to team members.
   Calling a team member works similarly to calling a tool: provide the task description as the 'task' argument. Since this team member is a real human, be as detailed and verbose as necessary in your task description.
@@ -114,7 +136,8 @@ system_prompt: |-
   1. ALWAYS provide a tool call, else you will fail.
   2. Always use the right arguments for the tools. Never use variable names as the action arguments, use the value instead.
   3. Call a tool only when needed: do not call the search agent if you do not need information, try to solve the task yourself. If no tool call is needed, use final_answer tool to return your answer.
-  4. Never re-do a tool call that you previously did with the exact same parameters.
+  4. If a skill matches the current task, prioritize following the skill's instructions rather than planning your own steps.
+  5. Never re-do a tool call that you previously did with the exact same parameters.
 
   Now Begin!
 planning:
@@ -139,7 +162,8 @@ planning:
 
     ## 2. Plan
     Then for the given task, develop a step-by-step high-level plan taking into account the above inputs and list of facts.
-    This plan should involve individual tasks based on the available tools, that if executed correctly will yield the correct answer.
+    This plan should involve individual tasks based on the available skills and tools, that if executed correctly will yield the correct answer.
+    If a skill is available that matches your task, incorporate it into your plan.
     Do not skip steps, do not add any superfluous steps. Only write the high-level plan, DO NOT DETAIL INDIVIDUAL TOOL CALLS.
     After writing the final step of the plan, write the '<end_plan>' tag and stop there.
 
@@ -147,6 +171,13 @@ planning:
     {%- for tool in tools.values() %}
     - {{ tool.to_tool_calling_prompt() }}
     {%- endfor %}
+
+    {%- if skills and skills.values() | list %}
+    You can also have access to these skills, which provide instructions on how to complete the specific task in plain text:
+    {%- for skill in skills.values() %}
+    - {{ skill.name }}: {{ skill.description }} (file: {{ skill.location.as_posix() }})
+    {%- endfor %}
+    {%- endif %}
 
     {%- if managed_agents and managed_agents.values() | list %}
     You can also give tasks to team members.
@@ -191,7 +222,8 @@ planning:
     ## 2. Plan
     ### 2. 1. ...
     Etc.
-    This plan should involve individual tasks based on the available tools, that if executed correctly will yield the correct answer.
+    This plan should involve individual tasks based on the available skills and tools, that if executed correctly will yield the correct answer.
+    If a skill is available that matches your task, incorporate it into your updated plan.
     Beware that you have {remaining_steps} steps remaining.
     Do not skip steps, do not add any superfluous steps. Only write the high-level plan, DO NOT DETAIL INDIVIDUAL TOOL CALLS.
     After writing the final step of the plan, write the '<end_plan>' tag and stop there.
@@ -200,6 +232,13 @@ planning:
     {%- for tool in tools.values() %}
     - {{ tool.to_tool_calling_prompt() }}
     {%- endfor %}
+
+    {%- if skills and skills.values() | list %}
+    You can also have access to skills, which provide instructions on how to complete the specific task in plain text:
+    {%- for skill in skills.values() %}
+    - {{ skill.name }}: {{ skill.description }} (file: {{ skill.location.as_posix() }})
+    {%- endfor %}
+    {%- endif %}
 
     {%- if managed_agents and managed_agents.values() | list %}
     You can also give tasks to team members.

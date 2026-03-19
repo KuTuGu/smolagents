@@ -33,11 +33,10 @@ class AgentSkill:
 
     name: str
     description: str
-    path: Path
-    content: str
+    location: Path
 
 
-def _split_frontmatter(text: str, path: Path) -> tuple[str, str]:
+def __extract_frontmatter(text: str, path: Path) -> str:
     lines = text.splitlines()
     if not lines or lines[0].strip() != "---":
         raise ValueError(f"Invalid skill file at '{path}': missing YAML frontmatter delimiter '---'.")
@@ -45,8 +44,7 @@ def _split_frontmatter(text: str, path: Path) -> tuple[str, str]:
     for index in range(1, len(lines)):
         if lines[index].strip() == "---":
             frontmatter = "\n".join(lines[1:index]).strip()
-            body = "\n".join(lines[index + 1 :]).strip()
-            return frontmatter, body
+            return frontmatter
 
     raise ValueError(f"Invalid skill file at '{path}': missing closing YAML frontmatter delimiter '---'.")
 
@@ -89,7 +87,7 @@ def parse_agent_skill(skill_source: str | Path) -> AgentSkill:
 
     skill_path = _normalize_skill_path(skill_source)
     text = skill_path.read_text(encoding="utf-8")
-    frontmatter, body = _split_frontmatter(text, skill_path)
+    frontmatter = __extract_frontmatter(text, skill_path)
 
     metadata = yaml.safe_load(frontmatter)
     if not isinstance(metadata, dict):
@@ -106,16 +104,16 @@ def parse_agent_skill(skill_source: str | Path) -> AgentSkill:
     _validate_skill_name(name, skill_path)
     _validate_skill_description(description, skill_path)
 
-    return AgentSkill(name=name, description=description, path=skill_path, content=body)
+    return AgentSkill(name=name, description=description, location=skill_path)
 
 
-def load_agent_skills(skill_sources: list[str | Path] | None = None) -> list[AgentSkill]:
+def load_agent_skills(skill_sources: list[str | Path] | None = None) -> dict[str, AgentSkill]:
     """Load and validate a collection of local skills."""
 
     if not skill_sources:
-        return []
+        return {}
 
-    skills: list[AgentSkill] = []
+    skills: dict[str, AgentSkill] = {}
     seen_names: set[str] = set()
     for source in skill_sources:
         skill = parse_agent_skill(source)
@@ -123,30 +121,5 @@ def load_agent_skills(skill_sources: list[str | Path] | None = None) -> list[Age
         if normalized_name in seen_names:
             raise ValueError(f"Duplicate skill name detected: '{skill.name}'.")
         seen_names.add(normalized_name)
-        skills.append(skill)
+        skills[normalized_name] = skill
     return skills
-
-
-def select_skills_for_task(skills: list[AgentSkill], task: str | None) -> list[AgentSkill]:
-    """
-    Select skills explicitly mentioned in a task.
-
-    A skill is selected if the task includes either `$skill-name` or `skill-name`.
-    """
-
-    if not skills or not task:
-        return []
-
-    task_lower = task.lower()
-    selected_skills: list[AgentSkill] = []
-
-    for skill in skills:
-        skill_name = skill.name.lower()
-        has_sigil_mention = f"${skill_name}" in task_lower
-        has_plain_mention = (
-            re.search(rf"(?<![a-z0-9-]){re.escape(skill_name)}(?![a-z0-9-])", task_lower) is not None
-        )
-        if has_sigil_mention or has_plain_mention:
-            selected_skills.append(skill)
-
-    return selected_skills
